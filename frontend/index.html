@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public PDF Vault</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f7f6; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .upload-section, .list-section { background-color: #fff; padding: 25px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .upload-section h2, .list-section h2 { color: #34495e; margin-top: 0; }
+        #message { margin-top: 15px; padding: 10px; border-radius: 5px; font-weight: bold; }
+        #pdfList { list-style: none; padding: 0; }
+        #pdfList li { border-bottom: 1px solid #ecf0f1; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;}
+        #pdfList a { text-decoration: none; color: #2980b9; font-size: 1.1em; transition: color 0.2s; }
+        #pdfList a:hover { color: #3498db; text-decoration: underline; }
+        button { background-color: #2ecc71; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; transition: background-color 0.2s; margin-left: 10px;}
+        button:hover { background-color: #27ae60; }
+        input[type="file"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>📚 Public PDF Vault</h1>
+    <p>Upload a PDF, and then see it instantly appear in the list below for everyone to view.</p>
+
+    <div class="upload-section">
+        <h2>⬆️ Upload a New PDF (Max 1 file at a time)</h2>
+        <form id="uploadForm">
+            <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required>
+            <button type="submit">Upload PDF</button>
+        </form>
+        <p id="message"></p>
+    </div>
+
+    <div class="list-section">
+        <h2>📄 Available Documents</h2>
+        <ul id="pdfList">
+            <li>Loading PDFs...</li>
+        </ul>
+    </div>
+
+    <script>
+        // The URL of your running backend
+        const API_BASE_URL = 'http://localhost:3000';
+        const pdfListElement = document.getElementById('pdfList');
+        const messageElement = document.getElementById('message');
+
+        // --- 1. HANDLE UPLOAD ---
+        document.getElementById('uploadForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            const fileInput = document.getElementById('pdfFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                messageElement.textContent = 'Please select a file.';
+                return;
+            }
+            
+            messageElement.style.backgroundColor = '#f1c40f';
+            messageElement.style.color = '#333';
+            messageElement.textContent = `Uploading file: ${file.name}...`;
+
+            // Create FormData object to send the file
+            const formData = new FormData();
+            formData.append('pdfFile', file); // 'pdfFile' must match the Multer key in server.js
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/upload`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    messageElement.style.backgroundColor = '#d4edda';
+                    messageElement.style.color = '#155724';
+                    messageElement.textContent = `SUCCESS: ${result.message}`;
+                    fileInput.value = ''; // Clear the input field
+                    loadPDFs(); // Refresh the list after a successful upload
+                } else {
+                    messageElement.style.backgroundColor = '#f8d7da';
+                    messageElement.style.color = '#721c24';
+                    messageElement.textContent = `ERROR: ${result.message}`;
+                }
+            } catch (error) {
+                console.error('Upload Error:', error);
+                messageElement.style.backgroundColor = '#f8d7da';
+                messageElement.style.color = '#721c24';
+                messageElement.textContent = 'An unexpected error occurred during upload. Check console for details.';
+            }
+        });
+
+
+        // --- 2. LOAD AND DISPLAY LIST ---
+        async function loadPDFs() {
+            pdfListElement.innerHTML = '<li>Refreshing list...</li>';
+            try {
+                const response = await fetch(`${API_BASE_URL}/pdfs`);
+                const data = await response.json();
+
+                if (data.success && data.pdfs.length > 0) {
+                    pdfListElement.innerHTML = ''; // Clear loading message
+
+                    data.pdfs.forEach(pdf => {
+                        const listItem = document.createElement('li');
+                        const link = document.createElement('a');
+                        
+                        link.href = pdf.url;
+                        link.textContent = pdf.name.substring(pdf.name.indexOf('-') + 1); // Display filename without timestamp
+                        link.target = '_blank'; // Opens the PDF in a new tab
+
+                        listItem.appendChild(link);
+                        pdfListElement.appendChild(listItem);
+                    });
+                } else {
+                    pdfListElement.innerHTML = '<li>No PDFs have been uploaded yet. Be the first!</li>';
+                }
+            } catch (error) {
+                console.error('Fetch List Error:', error);
+                pdfListElement.innerHTML = '<li>Could not connect to the backend server. Make sure it is running on port 3000.</li>';
+            }
+        }
+
+        // Load the list when the page first loads
+        window.onload = loadPDFs;
+    </script>
+
+</body>
+</html>
